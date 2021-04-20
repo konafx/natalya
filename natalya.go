@@ -7,8 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/konafx/natalya/commands"
-
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 ) 
@@ -39,12 +37,12 @@ func main() {
 	s.AddHandler(ready)
 
 	commands := []*discordgo.ApplicationCommand{
-		&commands.Hello,
-		&commands.SuperChat,
+		&Hello,
+		&SuperChat,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		"hello": commands.HelloHandler,
-		"superchat": commands.SuperChatHandler,
+		"hello": HelloHandler,
+		"superchat": SuperChatHandler,
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
