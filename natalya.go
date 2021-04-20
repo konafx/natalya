@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/konafx/natalya/commands"
+
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 ) 
@@ -37,24 +39,13 @@ func main() {
 	s.AddHandler(ready)
 
 	commands := []*discordgo.ApplicationCommand{
-		{
-			Name: "hello",
-			Description: "Hello command",
-		},
+		&commands.Hello,
+		&commands.SuperChat,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		"hello": func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionApplicationCommandResponseData{
-					Content: "Hey there! Congratulations, you just executed your first slash command",
-				},
-			})
-			return
-		},
+		"hello": commands.HelloHandler,
+		"superchat": commands.SuperChatHandler,
 	}
-
-	log.Printf("%#v", commandHandlers["hello"])
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := commandHandlers[i.Data.Name]; ok {
@@ -83,21 +74,10 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	fmt.Println("Tchau!")
+	fmt.Println("\nTchau!\n")
 	return
 }
 
 func ready(s *discordgo.Session, e *discordgo.Ready) {
 	s.UpdateGameStatus(0, Prefix + " <command>")
 }
-// 
-// var Hello = &discordgo.ApplicationCommand{
-// 
-// func HelloHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
-// 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-// 		Type: discordgo.InteractionResponseChannelMessageWithSource,
-// 		Data: &discordgo.InteractionApplicationCommandResponseData{
-// 			Content: "Hey there! Congratulations, you just executed your first slash command",
-// 		},
-// 	})
-// }
