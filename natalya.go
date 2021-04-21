@@ -44,8 +44,8 @@ func main() {
 		&SuperChat,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		"hello": HelloHandler,
-		"superchat": SuperChatHandler,
+		Hello.Name: HelloHandler,
+		SuperChat.Name: SuperChatHandler,
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
