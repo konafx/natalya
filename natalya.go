@@ -76,6 +76,12 @@ func main() {
 	<-sc
 
 	fmt.Println("\nTchau!\n")
+	for _, cmd := range commands {
+		if err := s.ApplicationCommandDelete(s.State.User.ID, *GuildId, cmd.ID); err != nil {
+			log.Errorf("Skip delete cmd: %s (ID: %d)", cmd.Name, cmd.ID)
+		}
+	}
+
 	return
 }
 
