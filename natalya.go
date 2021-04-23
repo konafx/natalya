@@ -42,10 +42,12 @@ func main() {
 	commands := []*discordgo.ApplicationCommand{
 		&Hello,
 		&SuperChat,
+		&Mahjong,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Hello.Name: HelloHandler,
 		SuperChat.Name: SuperChatHandler,
+		Mahjong.Name: MahjongHandler,
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -53,6 +55,22 @@ func main() {
 			h(s, i)
 		}
 	})
+
+	loops := []*Loop{
+		&TodayHandLoop,
+	}
+
+	tasks := map[string]func(s *discordgo.Session) {
+		TodayHandLoop.Name: TodayHandTask,
+	}
+
+	for _, loop := range loops {
+		task := func (s *discordgo.Session) func() {
+			return func () { tasks[loop.Name](s) }
+		}
+		go loop.ExecFn(task(s), TodayHandLoop.Init)
+	}
+
 
 	if err := s.Open(); err != nil {
 		fmt.Println(err)
@@ -64,11 +82,13 @@ func main() {
 
 	for _, v := range commands {
 		log.Println(*GuildId, v)
-		_, err := s.ApplicationCommandCreate(s.State.User.ID, *GuildId, v)
+		cmd, err := s.ApplicationCommandCreate(s.State.User.ID, *GuildId, v)
+		v.ID = cmd.ID
 		if err != nil {
 			log.Fatalf("Cannot create '%v' command: %v", err, v.Name)
 		}
 	}
+
 
 	fmt.Println("Natalya is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
@@ -76,9 +96,9 @@ func main() {
 	<-sc
 
 	fmt.Println("\nTchau!\n")
-	for _, cmd := range commands {
-		if err := s.ApplicationCommandDelete(s.State.User.ID, *GuildId, cmd.ID); err != nil {
-			log.Errorf("Skip delete cmd: %s (ID: %d)", cmd.Name, cmd.ID)
+	for _, v := range commands {
+		if err := s.ApplicationCommandDelete(s.State.User.ID, *GuildId, v.ID); err != nil {
+			log.Errorf("Skip delete cmd: %s (ID: %d)", v.Name, v.ID)
 		}
 	}
 
