@@ -40,3 +40,21 @@ func testGetChatcolor(t *testing.T, pay, expected int) {
 		t.Errorf("Compute(%d) = %d, want %d", pay, color, expected)
 	}
 }
+
+func TestUIntToZenkakuOkuman(t *testing.T) {
+	testUIntToZenkakuOkuman(t, 0, "０")
+	testUIntToZenkakuOkuman(t, 101, "１０１")
+	testUIntToZenkakuOkuman(t, 200000, "２０万")
+	testUIntToZenkakuOkuman(t, 300000000, "３億")
+	testUIntToZenkakuOkuman(t, 4000000000000, "４兆")
+	testUIntToZenkakuOkuman(t, 4030000000000, "４兆３００億")
+}
+
+func testUIntToZenkakuOkuman(t *testing.T, num uint, expected string) {
+	t.Helper()
+
+	okuman := uIntToZenkakuOkuman(num)
+	if okuman != expected {
+		t.Errorf("Compute(%d) = %s, want %s", num, okuman, expected)
+	}
+}

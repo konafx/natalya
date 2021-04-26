@@ -92,7 +92,7 @@ func uIntToZenkakuOkuman(num uint) (okuman string) {
 	)
 
 	if num == 0 {
-		okuman = "零"
+		okuman = "０"
 		return okuman
 	}
 	for i := 0; num > 0; i, num = i+1, num/10000 {

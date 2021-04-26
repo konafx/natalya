@@ -23,6 +23,7 @@ var s *discordgo.Session
 func init() {
 	log.SetLevel(log.DebugLevel)
 }
+
 func init() {
 	testing.Init()
 	flag.Parse()
