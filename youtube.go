@@ -134,7 +134,7 @@ func getChatcolor(pay int) (color int, err error) {
 	var price int = 0
 	payColor := ""
 	for th, colorname := range chatColors {
-		if pay > th && price < th {
+		if pay >= th && price < th {
 			price = th
 			payColor = colorname
 		}

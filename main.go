@@ -1,6 +1,7 @@
 package main
 
 import (
+	"testing"
 	"flag"
 	"fmt"
 	"os"
@@ -15,7 +16,6 @@ var (
 	GuildId			= flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
 	BotToken		= flag.String("token", "", "Bot access token")
 	RemoveCommand	= flag.Bool("rmcmd", true, "Remove all commands after shutdowning or not")
-	Prefix			= "/natalya"
 )
 
 var s *discordgo.Session
@@ -24,6 +24,7 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 }
 func init() {
+	testing.Init()
 	flag.Parse()
 }
 
@@ -95,10 +96,12 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	fmt.Println("\nTchau!\n")
+	fmt.Println("Tchau!")
+	if !*RemoveCommand { return }
+
 	for _, v := range commands {
 		if err := s.ApplicationCommandDelete(s.State.User.ID, *GuildId, v.ID); err != nil {
-			log.Errorf("Skip delete cmd: %s (ID: %d)", v.Name, v.ID)
+			log.Errorf("Skip delete cmd: %s (ID: %s)", v.Name, v.ID)
 		}
 	}
 
@@ -106,5 +109,5 @@ func main() {
 }
 
 func ready(s *discordgo.Session, e *discordgo.Ready) {
-	s.UpdateGameStatus(0, Prefix + " <command>")
+	s.UpdateGameStatus(0, "Dancing!")
 }
