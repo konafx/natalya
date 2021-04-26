@@ -42,6 +42,25 @@ func TodayHandTask(s *discordgo.Session) {
 
 	var hands []Hand
 	err = yaml.Unmarshal(buf, &hands)
+	if err != nil {
+		log.Errorf("Cannot read yaml file, err: %v", err)
+		return
+	}
+
+	var hand Hand
+	hand, err = choiceHand(hands)
+	if err != nil {
+		log.Errorf("hand choice error: %v", err)
+		return
+	}
+
+	todayHand = hand
+
+	log.Infof("Today hand is %s", todayHand.Name)
+}
+
+func choiceHand(hands []Hand) (Hand, error) {
+	var hand Hand = Hand{}
 
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -49,10 +68,15 @@ func TodayHandTask(s *discordgo.Session) {
 	for i, v := range hands {
 		choices[i] = wr.NewChoice(v, MaxFan - uint(v.Fan) + 1)
 	}
-	chooser, _ := wr.NewChooser(choices...)
 
-	todayHand = chooser.Pick().(Hand)
-	log.Infof("Today hand is %s", todayHand.Name)
+	chooser, err := wr.NewChooser(choices...)
+	if err != nil {
+		log.Errorf("Cannot create chooser, err: %v", err)
+		return hand, err
+	}
+
+	hand = chooser.Pick().(Hand)
+	return hand, nil
 }
 
 func choiceSerif() (string, error) {
