@@ -4,7 +4,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var AmongUs = discord.ApplicationCommand{
+var AmongUs = discordgo.ApplicationCommand{
 	Name: "mover",
 	Description: "３つのチャンネルを使ってAmong Usの部屋移動をやるヨ！\n",
 }
