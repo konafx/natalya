@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/konafx/natalya/cogs"
+	"github.com/konafx/natalya/loop"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 ) 
@@ -42,14 +44,14 @@ func main() {
 	s.AddHandler(ready)
 
 	commands := []*discordgo.ApplicationCommand{
-		&Hello,
-		&SuperChat,
-		&Mahjong,
+		&cogs.Hello,
+		&cogs.SuperChat,
+		&cogs.Mahjong,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		Hello.Name: HelloHandler,
-		SuperChat.Name: SuperChatHandler,
-		Mahjong.Name: MahjongHandler,
+		cogs.Hello.Name: cogs.HelloHandler,
+		cogs.SuperChat.Name: cogs.SuperChatHandler,
+		cogs.Mahjong.Name: cogs.MahjongHandler,
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -58,19 +60,19 @@ func main() {
 		}
 	})
 
-	loops := []*Loop{
-		&TodayHandLoop,
+	loops := []*loop.Loop{
+		&cogs.TodayHandLoop,
 	}
 
 	tasks := map[string]func(s *discordgo.Session) {
-		TodayHandLoop.Name: TodayHandTask,
+		cogs.TodayHandLoop.Name: cogs.TodayHandTask,
 	}
 
 	for _, loop := range loops {
 		task := func (s *discordgo.Session) func() {
 			return func () { tasks[loop.Name](s) }
 		}
-		go loop.ExecFn(task(s), TodayHandLoop.Init)
+		go loop.ExecFn(task(s), loop.Init)
 	}
 
 

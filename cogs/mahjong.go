@@ -1,4 +1,4 @@
-package main
+package cogs
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/konafx/natalya/loop"
 	wr "github.com/mroth/weightedrand"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -23,7 +24,7 @@ const (
 	SerifsFile = "assets/serifs.yml"
 )
 
-var TodayHandLoop = Loop{
+var TodayHandLoop = loop.Loop{
 	Name:		"TodayHand",
 	Seconds:	0,
 	Minites:	0,

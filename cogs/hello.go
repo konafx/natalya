@@ -1,4 +1,4 @@
-package main
+package cogs
 
 import (
 	"github.com/bwmarrin/discordgo"
