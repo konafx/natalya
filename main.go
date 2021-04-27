@@ -1,16 +1,16 @@
 package main
 
 import (
-	"testing"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"testing"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/konafx/natalya/cogs"
 	"github.com/konafx/natalya/loop"
-	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 ) 
 
@@ -47,11 +47,13 @@ func main() {
 		&cogs.Hello,
 		&cogs.SuperChat,
 		&cogs.Mahjong,
+		&cogs.AmongUs,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		cogs.Hello.Name: cogs.HelloHandler,
 		cogs.SuperChat.Name: cogs.SuperChatHandler,
 		cogs.Mahjong.Name: cogs.MahjongHandler,
+		cogs.AmongUs.Name: cogs.AmongUsHandler,
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -75,6 +77,7 @@ func main() {
 		go loop.ExecFn(task(s), loop.Init)
 	}
 
+	s.AddHandler(cogs.AmongUsMessageCreateHandler)
 
 	if err := s.Open(); err != nil {
 		fmt.Println(err)
