@@ -2,35 +2,33 @@ package cogs
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/konafx/natalya/util"
-	"github.com/kyokomi/emoji/v2"
 	log "github.com/sirupsen/logrus"
 )
+
+/*
+ * [Create Reaction](https://discord.com/developers/docs/resources/channel#create-reaction)
+ * This endpoint requires the 'READ_MESSAGE_HISTORY' permission to be present on the current user.
+ * Additionally, if nobody else has reacted to the message using this emoji, this endpoint requires the 'ADD_REACTIONS' permission to be present on the current user. Returns a 204 empty response on success.
+ */
 
 const (
 	ChannelTypeLobby = iota
 	ChannelTypeHeaven
 )
 
-var (
-	EmojiMeeting	= emoji.Sprintf(":loudspeaker:")
-	EmojiMute		= emoji.Sprintf(":zipper-mouth_face:")
-	EmojiFinish		= emoji.Sprintf(":party_popper:")
+const (
+	EmojiMeeting	= "📢"
+	EmojiMute		= "🤐"
+	EmojiFinish		= "🎉"
 )
 
 // type Player struct {
 // 	voiceState	*discordgo.VoiceState
 // 	member		*discordgo.Member
-// }
-
-// func AmongUsReactionAddHandler(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
-// 	var heaven *discordgo.Channel
-// 	isDead := func (p *Player) bool {
-// 		return p.voiceState.ChannelID == heaven.ID
-// 	}
-// 
 // }
 
 
@@ -111,11 +109,20 @@ func AmongUsMessageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreat
 
 	emojis := []string{EmojiMeeting, EmojiMute, EmojiFinish}
 	for _, e := range emojis {
-		log.Debug(e)
-		err := s.MessageReactionAdd(m.ChannelID, m.Message.ID, e)
+		err := s.MessageReactionAdd(m.ChannelID, m.Message.ID, url.QueryEscape(e))
 		if err != nil {
 			log.Error(err)
 		}
 	}
 	return
 }
+// 
+// func AmongUsReactionAddHandler(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+// 	m.
+// 	var heaven *discordgo.Channel
+// 	isDead := func (p *Player) bool {
+// 		return p.voiceState.ChannelID == heaven.ID
+// 	}
+// 
+// }
+
