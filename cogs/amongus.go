@@ -17,6 +17,13 @@ import (
  * Additionally, if nobody else has reacted to the message using this emoji, this endpoint requires the 'ADD_REACTIONS' permission to be present on the current user. Returns a 204 empty response on success.
  */
 
+/*
+ * スラッシュコマンドから embed メッセージを送信する
+ * この機能の embed メッセージに絵文字をつける
+ * ユーザーが絵文字を押したら、embed メッセージに記載のある
+ * ボイスチャンネルを使って、参加ユーザーの音声状態を変更する
+ */
+
 const (
 	ChannelTypeLobby = iota
 	ChannelTypeHeaven
@@ -153,10 +160,9 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 
 	log.Debug("Reaction Process")
 	// TODO: Guild Emoji対応すべき？
-	g, _ := s.Guild(r.GuildID)
+	g, _ := s.State.Guild(r.GuildID)
 	log.Debugf("%#v", g.VoiceStates)
 	var eg errgroup.Group
-	// ERR: g.VoiceStates = []*discordgo.VoiceState(nil)
 	for _, vs := range g.VoiceStates {
 		// TODO: このコメントを消す https://qiita.com/koduki/items/55c277efe8c4ee77910b
 		log.Debugf("%#v", vs)
@@ -176,6 +182,9 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 			}
 		case EmojiMute:
 			log.Debug("SHIIIIIIIIIIII")
+			if vs.ChannelID != chs[ChannelTypeLobby].ID {
+				continue
+			}
 			switch vs.Mute || vs.SelfMute {
 			case false:
 				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, true, false, "") })
@@ -191,9 +200,18 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, chs[ChannelTypeLobby].ID) })
 			}
 		default:
-			log.Debug("Nothing")
+			log.Debug("Nothing to do")
 		}
 	}
+	emojiID := r.Emoji.ID
+	if emojiID == "" {
+		emojiID = url.QueryEscape(r.Emoji.Name)
+	}
+	err = s.MessageReactionRemove(r.ChannelID, r.MessageID, emojiID, r.UserID)
+	if err != nil {
+		log.Error(err)
+	}
+
 	if err := eg.Wait(); err != nil {
 		log.Error(err)
 	}

@@ -2,7 +2,6 @@ package util
 
 import (
 	"github.com/bwmarrin/discordgo"
-	"gopkg.in/guregu/null.v4"
 )
 
 /*
@@ -12,16 +11,16 @@ import (
  */
 
 type ModifyVoiceStateParam struct {
-	Mute		bool		`json:"mute"`
-	Deaf		bool		`json:"deaf"`
-	ChannelID	null.String	`json:"channel_id"`
+	Mute		bool	`json:"mute"`
+	Deaf		bool	`json:"deaf"`
+	ChannelID	string	`json:"channel_id,omitempty"`
 }
 
 func RequestModifyVoiceState(s *discordgo.Session, guildID, userID string, mute, deaf bool, destination string) error {
 	p := ModifyVoiceStateParam{
 		Mute:	mute,
 		Deaf:	deaf,
-		ChannelID:	null.StringFrom(destination),
+		ChannelID:	destination,
 	}
 	_, err := s.RequestWithBucketID("PATCH", discordgo.EndpointGuildMember(guildID, userID), p, discordgo.EndpointGuildMember(guildID, ""))
 	return err

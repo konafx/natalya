@@ -34,6 +34,7 @@ func init() {
 func init() {
 	var err error
 	s, err = discordgo.New("Bot " + *BotToken)
+	s.LogLevel = 4
 	if err != nil {
 		fmt.Printf("error creating Discord session: %v", err)
 		os.Exit(1)
