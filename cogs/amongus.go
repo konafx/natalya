@@ -3,7 +3,9 @@ package cogs
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 
+	"golang.org/x/sync/errgroup"
 	"github.com/bwmarrin/discordgo"
 	"github.com/konafx/natalya/util"
 	log "github.com/sirupsen/logrus"
@@ -20,17 +22,12 @@ const (
 	ChannelTypeHeaven
 )
 
+// TODO: 設定できると面白いか？
 const (
 	EmojiMeeting	= "📢"
 	EmojiMute		= "🤐"
 	EmojiFinish		= "🎉"
 )
-
-// type Player struct {
-// 	voiceState	*discordgo.VoiceState
-// 	member		*discordgo.Member
-// }
-
 
 var AmongUs = discordgo.ApplicationCommand{
 	Name: "mover",
@@ -116,13 +113,90 @@ func AmongUsMessageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreat
 	}
 	return
 }
-// 
-// func AmongUsReactionAddHandler(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
-// 	m.
-// 	var heaven *discordgo.Channel
-// 	isDead := func (p *Player) bool {
-// 		return p.voiceState.ChannelID == heaven.ID
-// 	}
-// 
-// }
+
+func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	if r.UserID == s.State.User.ID {
+		return
+	}
+
+	m, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+	if err != nil {
+		log.Errorf("Cannot message: %v", err)
+		return
+	}
+
+	log.Debug(m.Embeds[0].Title)
+	if len(m.Embeds) == 0 || m.Embeds[0].Title != "Amove Us" {
+		return
+	}
+
+	var chs [2]*discordgo.Channel
+	// TODO: スライスの長さと Fields の長さが不一致なことはあるだろうか。
+	for i, v := range m.Embeds[0].Fields {
+		// matches: ["<#123456789>", "123456789"]
+		matches := regexp.MustCompile(`<#(\d+)>`).FindStringSubmatch(v.Value)
+		if len(matches) == 0 {
+			return
+		}
+		ch, err := s.Channel(matches[1])
+		if err != nil {
+			log.Errorf("%s was not found: %v", v.Value, err)
+			return
+		}
+		if ch.Type != discordgo.ChannelTypeGuildVoice {
+			log.Errorf("%s is not VoiceChannel", ch.Name)
+			return
+		}
+
+		chs[i] = ch
+	}
+
+	log.Debug("Reaction Process")
+	// TODO: Guild Emoji対応すべき？
+	g, _ := s.Guild(r.GuildID)
+	log.Debugf("%#v", g.VoiceStates)
+	var eg errgroup.Group
+	// ERR: g.VoiceStates = []*discordgo.VoiceState(nil)
+	for _, vs := range g.VoiceStates {
+		// TODO: このコメントを消す https://qiita.com/koduki/items/55c277efe8c4ee77910b
+		log.Debugf("%#v", vs)
+		session := *s
+		guildID := g.ID
+		userID  := vs.UserID
+		log.Debugln(guildID, userID)
+		log.Debugf("%#v", r.Emoji)
+		switch r.Emoji.Name {
+		case EmojiMeeting:
+			log.Debug("Meeting")
+			switch vs.ChannelID {
+			case chs[ChannelTypeLobby].ID:
+				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, "") })
+			case chs[ChannelTypeHeaven].ID:
+				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, true, false, chs[ChannelTypeLobby].ID) })
+			}
+		case EmojiMute:
+			log.Debug("SHIIIIIIIIIIII")
+			switch vs.Mute || vs.SelfMute {
+			case false:
+				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, true, false, "") })
+			case true:
+				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, chs[ChannelTypeHeaven].ID) })
+			}
+		case EmojiFinish:
+			log.Debug("End")
+			switch vs.ChannelID {
+			case chs[ChannelTypeLobby].ID:
+				fallthrough
+			case chs[ChannelTypeHeaven].ID:
+				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, chs[ChannelTypeLobby].ID) })
+			}
+		default:
+			log.Debug("Nothing")
+		}
+	}
+	if err := eg.Wait(); err != nil {
+		log.Error(err)
+	}
+	return
+}
 

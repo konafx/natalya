@@ -78,6 +78,11 @@ func main() {
 	}
 
 	s.AddHandler(cogs.AmongUsMessageCreateHandler)
+	s.AddHandler(cogs.AmongUsReactionAddHandler)
+	// debug
+	s.AddHandler(func (s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
+		log.Debugf("%#v", *v)
+	})
 
 	if err := s.Open(); err != nil {
 		fmt.Println(err)
