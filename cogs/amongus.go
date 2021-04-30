@@ -84,8 +84,9 @@ func AmongUsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 		chs[j] = ch
 	}
-
 	log.Debug(chs[0].Name, chs[1].Name)
+
+	// embed message 作成
 	embed := new(discordgo.MessageEmbed)
 	embed.Title = "Amove Us"
 	embed.Description = fmt.Sprintf(`各タイミングで**絵文字を押セ！**
@@ -116,12 +117,10 @@ Victory or Defeat→%s`,
 func AmongUsMessageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	log.Debug("AmongUs")
 	if m.Author.ID != s.State.User.ID && len(m.Embeds) == 0 {
-		log.Debug("it's not me'")
 		return
 	}
 
 	if m.Embeds[0].Title != "Amove Us" {
-		log.Debug("it's not Amove Us'")
 		return
 	}
 
@@ -151,6 +150,7 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 		return
 	}
 
+	// チャンネル取得
 	var chs [2]*discordgo.Channel
 	// TODO: スライスの長さと Fields の長さが不一致なことはあるだろうか。
 	for i, v := range m.Embeds[0].Fields {
@@ -172,9 +172,8 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 		chs[i] = ch
 	}
 
-	log.Debug("Reaction Process")
+	// Mover 本体
 	g, _ := s.State.Guild(r.GuildID)
-	log.Debugf("%#v", g.VoiceStates)
 	var eg errgroup.Group
 	for _, vs := range g.VoiceStates {
 		// TODO: このコメントを消す https://qiita.com/koduki/items/55c277efe8c4ee77910b
@@ -216,14 +215,8 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 			log.Debug("Nothing to do")
 		}
 	}
-	emojiID := r.Emoji.ID
-	if emojiID == "" {
-		emojiID = url.QueryEscape(r.Emoji.Name)
-	}
-	err = s.MessageReactionRemove(r.ChannelID, r.MessageID, emojiID, r.UserID)
-	if err != nil {
-		log.Error(err)
-	}
+
+	eg.Go(func () error { return removeAddedReaction(s, r) })
 
 	if err := eg.Wait(); err != nil {
 		log.Error(err)
@@ -231,3 +224,16 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 	return
 }
 
+func removeAddedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) error {
+	emojiID := r.Emoji.ID
+	if emojiID == "" {
+		emojiID = url.QueryEscape(r.Emoji.Name)
+	}
+
+	err := s.MessageReactionRemove(r.ChannelID, r.MessageID, emojiID, r.UserID)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	return nil
+}
