@@ -56,17 +56,31 @@ var AmongUs = discordgo.ApplicationCommand{
 }
 
 func AmongUsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	g, err := s.State.Guild(i.GuildID)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	// チャンネル取得
 	length := len(AmongUs.Options)
 	chs := make([]*discordgo.Channel, length)
 	for j := 0; j < length; j++ {
 		ch := i.Data.Options[j].ChannelValue(s)
-		if ch.Type != discordgo.ChannelTypeGuildVoice {
-			message := fmt.Sprintf("%s だとしゃべれないヨ！", ch.Mention())
-			err := util.InteractionErrorResponse(s, *i.Interaction, message)
-			if err != nil {
-				log.Error(err)
-				return
+		var message string
+		switch {
+		case ch.ID == g.AfkChannelID:
+			if message == "" {
+				message = fmt.Sprintf("%s は AFKチャンネルだヨ♪ｽﾔｽﾔ～zzz", ch.Mention())
 			}
+			fallthrough
+		case ch.Type != discordgo.ChannelTypeGuildVoice:
+			if message == "" {
+				message = fmt.Sprintf("%s だとしゃべれないヨ！", ch.Mention())
+			}
+			err := util.InteractionErrorResponse(s, *i.Interaction, message)
+			if err != nil { log.Error(err) }
+			return
 		}
 		chs[j] = ch
 	}
@@ -112,8 +126,8 @@ func AmongUsMessageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreat
 	}
 
 	emojis := []string{EmojiMeeting, EmojiMute, EmojiFinish}
-	for _, e := range emojis {
-		err := s.MessageReactionAdd(m.ChannelID, m.Message.ID, url.QueryEscape(e))
+	for _, v := range emojis {
+		err := s.MessageReactionAdd(m.ChannelID, m.Message.ID, url.QueryEscape(v))
 		if err != nil {
 			log.Error(err)
 		}
