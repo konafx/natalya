@@ -10,20 +10,39 @@ import (
  * channel_id	snowflake	id of channel to move user to (if they are connected to voice)	MOVE_MEMBERS
  */
 
-type ModifyVoiceStateParam struct {
-	Mute		bool	`json:"mute"`
-	Deaf		bool	`json:"deaf"`
-	ChannelID	string	`json:"channel_id,omitempty"`
+type ModifyVSParams struct {
+	Mute		*bool	`json:"mute,omitempty"`
+	Deaf		*bool	`json:"deaf,omitempty"`
+	ChannelID	*string	`json:"channel_id,omitempty"`
 }
 
-func RequestModifyVoiceState(s *discordgo.Session, guildID, userID string, mute, deaf bool, destination string) error {
-	p := ModifyVoiceStateParam{
-		Mute:	mute,
-		Deaf:	deaf,
-		ChannelID:	destination,
+type ModifyVSParam func(*ModifyVSParams)
+
+func ModifyVSParamMute(mute bool) ModifyVSParam {
+	return func(m *ModifyVSParams) {
+		m.Mute = &mute
 	}
-	_, err := s.RequestWithBucketID("PATCH", discordgo.EndpointGuildMember(guildID, userID), p, discordgo.EndpointGuildMember(guildID, ""))
+}
+
+func ModifyVSParamDeaf(deaf bool) ModifyVSParam {
+	return func(m *ModifyVSParams) {
+		m.Deaf = &deaf
+	}
+}
+
+func ModifyVSParamChannelID(channelID string) ModifyVSParam {
+	return func(m *ModifyVSParams) {
+		m.ChannelID = &channelID
+	}
+}
+
+func RequestModifyVS(s *discordgo.Session, guildID, userID string, params ...ModifyVSParam) error {
+	p := &ModifyVSParams{}
+
+	for _, param := range params {
+		param(p)
+	}
+
+	_, err := s.RequestWithBucketID("PATCH", discordgo.EndpointGuildMember(guildID, userID), *p, discordgo.EndpointGuildMember(guildID, ""))
 	return err
 }
-
-

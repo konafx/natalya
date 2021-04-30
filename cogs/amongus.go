@@ -7,8 +7,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"github.com/bwmarrin/discordgo"
-	"github.com/konafx/natalya/util"
 	log "github.com/sirupsen/logrus"
+	u "github.com/konafx/natalya/util"
 )
 
 /*
@@ -26,6 +26,7 @@ import (
 
 const (
 	ChannelTypeLobby = iota
+	ChannelTypeOnBoard
 	ChannelTypeHeaven
 )
 
@@ -38,12 +39,18 @@ const (
 
 var AmongUs = discordgo.ApplicationCommand{
 	Name: "mover",
-	Description: "２つのチャンネルを使ってAmong Usの部屋移動をやるヨ！\n",
+	Description: "３つのチャンネルを使ってAmong Usの部屋移動をやるヨ！\n",
 	Options: []*discordgo.ApplicationCommandOption{
 		{
 			Type:			discordgo.ApplicationCommandOptionChannel,
 			Name:			"lobby",
-			Description:	"生者のお部屋",
+			Description:	"ロビー",
+			Required:		true,
+		},
+		{
+			Type:			discordgo.ApplicationCommandOptionChannel,
+			Name:			"onboard",
+			Description:	"船内",
 			Required:		true,
 		},
 		{
@@ -69,22 +76,22 @@ func AmongUsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		ch := i.Data.Options[j].ChannelValue(s)
 		var message string
 		switch {
-		case ch.ID == g.AfkChannelID:
+		case j != ChannelTypeOnBoard && ch.ID == g.AfkChannelID:
 			if message == "" {
-				message = fmt.Sprintf("%s は AFKチャンネルだヨ♪ｽﾔｽﾔ～zzz", ch.Mention())
+				message = fmt.Sprintf("%s は AFKチャンネルだから%s にできないんダ～♪ｽﾔｽﾔ～zzz", ch.Mention(), AmongUs.Options[ChannelTypeOnBoard].Description)
 			}
 			fallthrough
 		case ch.Type != discordgo.ChannelTypeGuildVoice:
 			if message == "" {
 				message = fmt.Sprintf("%s だとしゃべれないヨ！", ch.Mention())
 			}
-			err := util.InteractionErrorResponse(s, *i.Interaction, message)
+			err := u.InteractionErrorResponse(s, *i.Interaction, message)
 			if err != nil { log.Error(err) }
 			return
 		}
 		chs[j] = ch
 	}
-	log.Debug(chs[0].Name, chs[1].Name)
+	log.Debug(chs[0].Name, chs[1].Name, chs[2].Name)
 
 	// embed message 作成
 	embed := new(discordgo.MessageEmbed)
@@ -94,15 +101,12 @@ func AmongUsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 SHHHHHHH!!→%s
 Victory or Defeat→%s`,
 	EmojiMeeting, EmojiMute, EmojiFinish)
-	embed.Fields = []*discordgo.MessageEmbedField{
-		{
-			Name:	"生者のお部屋",
-			Value:	chs[0].Mention(),
-		},
-		{
-			Name:	"天界",
-			Value:	chs[1].Mention(),
-		},
+	for j := 0; j < length; j++ {
+		field := discordgo.MessageEmbedField{
+			Name:	AmongUs.Options[j].Description,
+			Value:	chs[j].Mention(),
+		}
+		embed.Fields = append(embed.Fields, &field)
 	}
 
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -151,7 +155,7 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 	}
 
 	// チャンネル取得
-	var chs [2]*discordgo.Channel
+	var chs [3]*discordgo.Channel
 	// TODO: スライスの長さと Fields の長さが不一致なことはあるだろうか。
 	for i, v := range m.Embeds[0].Fields {
 		// matches: ["<#123456789>", "123456789"]
@@ -172,8 +176,10 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 		chs[i] = ch
 	}
 
-	// Mover 本体
 	g, _ := s.State.Guild(r.GuildID)
+	isAfk := chs[ChannelTypeOnBoard].ID == g.AfkChannelID
+
+	// Mover 本体
 	var eg errgroup.Group
 	for _, vs := range g.VoiceStates {
 		// TODO: このコメントを消す https://qiita.com/koduki/items/55c277efe8c4ee77910b
@@ -181,16 +187,18 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 		session := *s
 		guildID := g.ID
 		userID  := vs.UserID
-		log.Debugln(guildID, userID)
-		log.Debugf("%#v", r.Emoji)
 		switch r.Emoji.Name {
 		case EmojiMeeting:
 			log.Debug("Meeting")
 			switch vs.ChannelID {
-			case chs[ChannelTypeLobby].ID:
-				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, "") })
+			case chs[ChannelTypeOnBoard].ID:
+				eg.Go(func () error {
+					return u.RequestModifyVS(&session, guildID, userID, u.ModifyVSParamMute(false), u.ModifyVSParamChannelID(chs[ChannelTypeLobby].ID))
+				})
 			case chs[ChannelTypeHeaven].ID:
-				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, true, false, chs[ChannelTypeLobby].ID) })
+				eg.Go(func () error {
+					return u.RequestModifyVS(&session, guildID, userID, u.ModifyVSParamMute(true), u.ModifyVSParamChannelID(chs[ChannelTypeLobby].ID))
+				})
 			}
 		case EmojiMute:
 			log.Debug("SHIIIIIIIIIIII")
@@ -199,17 +207,24 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 			}
 			switch vs.Mute || vs.SelfMute {
 			case false:
-				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, true, false, "") })
+				eg.Go(func () error {
+					if isAfk {
+						return u.RequestModifyVS(&session, guildID, userID, u.ModifyVSParamChannelID(chs[ChannelTypeOnBoard].ID))
+					}
+					return u.RequestModifyVS(&session, guildID, userID, u.ModifyVSParamMute(true), u.ModifyVSParamChannelID(chs[ChannelTypeOnBoard].ID))
+				})
 			case true:
-				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, chs[ChannelTypeHeaven].ID) })
+				eg.Go(func () error {
+					return u.RequestModifyVS(&session, guildID, userID, u.ModifyVSParamMute(false), u.ModifyVSParamChannelID(chs[ChannelTypeHeaven].ID))
+				})
 			}
 		case EmojiFinish:
 			log.Debug("End")
 			switch vs.ChannelID {
-			case chs[ChannelTypeLobby].ID:
-				fallthrough
-			case chs[ChannelTypeHeaven].ID:
-				eg.Go(func () error { return util.RequestModifyVoiceState(&session, guildID, userID, false, false, chs[ChannelTypeLobby].ID) })
+			case chs[ChannelTypeLobby].ID, chs[ChannelTypeOnBoard].ID, chs[ChannelTypeHeaven].ID:
+				eg.Go(func () error {
+					return u.RequestModifyVS(&session, guildID, userID, u.ModifyVSParamMute(false), u.ModifyVSParamChannelID(chs[ChannelTypeLobby].ID))
+				})
 			}
 		default:
 			log.Debug("Nothing to do")
