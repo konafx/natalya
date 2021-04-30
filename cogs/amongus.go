@@ -159,7 +159,6 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 	}
 
 	log.Debug("Reaction Process")
-	// TODO: Guild Emoji対応すべき？
 	g, _ := s.State.Guild(r.GuildID)
 	log.Debugf("%#v", g.VoiceStates)
 	var eg errgroup.Group
