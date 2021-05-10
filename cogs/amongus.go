@@ -119,8 +119,7 @@ Victory or Defeat→%s`,
 }
 
 func AmongUsMessageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
-	log.Debug("AmongUs")
-	if m.Author.ID != s.State.User.ID && len(m.Embeds) == 0 {
+	if m.Author.ID != s.State.User.ID || len(m.Embeds) == 0 {
 		return
 	}
 
@@ -128,6 +127,7 @@ func AmongUsMessageCreateHandler(s *discordgo.Session, m *discordgo.MessageCreat
 		return
 	}
 
+	log.Debug("AmoveUs starts to react")
 	emojis := []string{EmojiMeeting, EmojiMute, EmojiFinish}
 	for _, v := range emojis {
 		err := s.MessageReactionAdd(m.ChannelID, m.Message.ID, url.QueryEscape(v))
