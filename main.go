@@ -12,7 +12,7 @@ import (
 	"github.com/konafx/natalya/cogs"
 	"github.com/konafx/natalya/loop"
 	log "github.com/sirupsen/logrus"
-) 
+)
 
 var (
 	GuildId			= flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
@@ -49,12 +49,14 @@ func main() {
 		&cogs.SuperChat,
 		&cogs.Mahjong,
 		&cogs.AmongUs,
+		&cogs.Haiku,
 	}
 	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		cogs.Hello.Name: cogs.HelloHandler,
 		cogs.SuperChat.Name: cogs.SuperChatHandler,
 		cogs.Mahjong.Name: cogs.MahjongHandler,
 		cogs.AmongUs.Name: cogs.AmongUsHandler,
+		cogs.Haiku.Name: cogs.HaikuHandler,
 	}
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
