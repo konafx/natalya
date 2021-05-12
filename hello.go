@@ -1,10 +1,10 @@
-package cogs
+package main
 
 import (
 	"github.com/bwmarrin/discordgo"
 )
 
-var Hello = discordgo.ApplicationCommand{
+var Hello Command = &discordgo.ApplicationCommand{
 	Name: "hello",
 	Description: "Hello command",
 }
@@ -17,4 +17,8 @@ func HelloHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		},
 	})
 	return
+}
+
+func init() {
+	addCommand(Hello, HelloHandler)
 }

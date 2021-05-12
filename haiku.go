@@ -1,4 +1,4 @@
-package cogs
+package main
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type UnknownPoetGame struct {
 	GuildID	string		`json:"guildId" firestore:"guildId"`
 }
 
-var Haiku = discordgo.ApplicationCommand{
+var Haiku Command = &discordgo.ApplicationCommand{
 	Name: "haiku",
 	Description: "俳句ゲームだヨ♪\n",
 	Options: []*discordgo.ApplicationCommandOption{
@@ -169,4 +169,8 @@ func createClient(ctx context.Context) *firestore.Client {
 	// Close client when done with
 	// defer client.Close()
 	return client
+}
+
+func init() {
+	addCommand(Haiku, HaikuHandler)
 }

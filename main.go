@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/konafx/natalya/cogs"
 	"github.com/konafx/natalya/loop"
 	log "github.com/sirupsen/logrus"
 )
@@ -20,7 +19,33 @@ var (
 	RemoveCommand	= flag.Bool("rmcmd", true, "Remove all commands after shutdowning or not")
 )
 
-var s *discordgo.Session
+type Command *discordgo.ApplicationCommand
+
+type CommandHandler func(*discordgo.Session, *discordgo.InteractionCreate)
+
+var (
+	s *discordgo.Session
+	commands	[]Command
+	commandHandlers		map[string]CommandHandler = map[string]CommandHandler{}
+	loops	[]*loop.Loop
+	tasks	map[string]func(*discordgo.Session) = map[string]func(*discordgo.Session){}
+	handlers	[]interface{}
+	initializers	[]func()
+)
+
+func addCommand(c Command, ch CommandHandler) {
+	commands = append(commands, c)
+	commandHandlers[c.Name] = ch
+}
+
+func addLoopTask(l *loop.Loop, t func(*discordgo.Session)) {
+	loops = append(loops, l)
+	tasks[l.Name] = t
+}
+
+func addHandler(h ...interface{}){
+	handlers = append(handlers, h...)
+}
 
 func init() {
 	log.SetLevel(log.DebugLevel)
@@ -44,34 +69,11 @@ func init() {
 func main() {
 	s.AddHandler(ready)
 
-	commands := []*discordgo.ApplicationCommand{
-		&cogs.Hello,
-		&cogs.SuperChat,
-		&cogs.Mahjong,
-		&cogs.AmongUs,
-		&cogs.Haiku,
-	}
-	commandHandlers := map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		cogs.Hello.Name: cogs.HelloHandler,
-		cogs.SuperChat.Name: cogs.SuperChatHandler,
-		cogs.Mahjong.Name: cogs.MahjongHandler,
-		cogs.AmongUs.Name: cogs.AmongUsHandler,
-		cogs.Haiku.Name: cogs.HaikuHandler,
-	}
-
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := commandHandlers[i.Data.Name]; ok {
 			h(s, i)
 		}
 	})
-
-	loops := []*loop.Loop{
-		&cogs.TodayHandLoop,
-	}
-
-	tasks := map[string]func(s *discordgo.Session) {
-		cogs.TodayHandLoop.Name: cogs.TodayHandTask,
-	}
 
 	for _, loop := range loops {
 		task := func (s *discordgo.Session) func() {
@@ -79,13 +81,6 @@ func main() {
 		}
 		go loop.ExecFn(task(s), loop.Init)
 	}
-
-	s.AddHandler(cogs.AmongUsMessageCreateHandler)
-	s.AddHandler(cogs.AmongUsReactionAddHandler)
-	// debug
-	s.AddHandler(func (s *discordgo.Session, v *discordgo.VoiceStateUpdate) {
-		log.Debugf("%#v", *v)
-	})
 
 	if err := s.Open(); err != nil {
 		fmt.Println(err)
@@ -104,6 +99,9 @@ func main() {
 		}
 	}
 
+	for _, v := range handlers {
+		s.AddHandler(v)
+	}
 
 	fmt.Println("Natalya is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)

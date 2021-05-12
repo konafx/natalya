@@ -1,4 +1,4 @@
-package cogs
+package main
 
 import (
 	"fmt"
@@ -104,7 +104,7 @@ var TodayHand = discordgo.ApplicationCommandOption{
 	Description: "デイリーミッション♪",
 }
 
-var Mahjong = discordgo.ApplicationCommand{
+var Mahjong Command = &discordgo.ApplicationCommand{
 	Name: "mahjong",
 	Description: "背中が煤けてるゼ…",
 	Options: []*discordgo.ApplicationCommandOption{
@@ -138,4 +138,9 @@ func MahjongHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		},
 	})
 	return
+}
+
+func init() {
+	addCommand(Mahjong, MahjongHandler)
+	addLoopTask(&TodayHandLoop, TodayHandTask)
 }

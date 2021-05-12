@@ -1,4 +1,4 @@
-package cogs
+package main
 
 import (
 	"fmt"
@@ -37,7 +37,7 @@ const (
 	EmojiFinish		= "🎉"
 )
 
-var AmongUs = discordgo.ApplicationCommand{
+var AmongUs Command  = &discordgo.ApplicationCommand{
 	Name: "mover",
 	Description: "３つのチャンネルを使ってAmong Usの部屋移動をやるヨ！\n",
 	Options: []*discordgo.ApplicationCommandOption{
@@ -251,4 +251,10 @@ func removeAddedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) 
 		return err
 	}
 	return nil
+}
+
+func init() {
+	log.Debugf("%v, %v", AmongUs, AmongUsHandler)
+	addCommand(AmongUs, AmongUsHandler)
+	addHandler(AmongUsReactionAddHandler, AmongUsMessageCreateHandler)
 }

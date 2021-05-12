@@ -4,6 +4,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// This template cannot use after the commit `d57d792`
+
 var Command = discordgo.ApplicationCommand{
 	Name: "name",
 	Description: "description",

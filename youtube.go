@@ -1,4 +1,4 @@
-package cogs
+package main
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ var (
 	MaxTip int64 = 50000
 )
 
-var SuperChat = discordgo.ApplicationCommand{
+var SuperChat Command = &discordgo.ApplicationCommand{
 	Name: "superchat",
 	Description: "センキュー・スパチャ♪ ┗(┓卍^o^)卍ﾄﾞｩﾙﾙﾙﾙﾙﾙ↑↑",
 	Options: []*discordgo.ApplicationCommandOption{
@@ -149,4 +149,8 @@ func getChatcolor(pay int) (color int, err error) {
 	}
 
 	return color, nil
+}
+
+func init() {
+	addCommand(SuperChat, SuperChatHandler)
 }
