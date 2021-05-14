@@ -4,8 +4,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func InteractionErrorResponse(s *discordgo.Session, i discordgo.Interaction, message string) error {
-	err := s.InteractionRespond(&i, &discordgo.InteractionResponse{
+func InteractionErrorResponse(s *discordgo.Session, i *discordgo.Interaction, message string) error {
+	err := s.InteractionRespond(i, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionApplicationCommandResponseData{
 			Content: message,

@@ -85,7 +85,7 @@ func AmongUsHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			if message == "" {
 				message = fmt.Sprintf("%s だとしゃべれないヨ！", ch.Mention())
 			}
-			err := u.InteractionErrorResponse(s, *i.Interaction, message)
+			err := u.InteractionErrorResponse(s, i.Interaction, message)
 			if err != nil { log.Error(err) }
 			return
 		}
