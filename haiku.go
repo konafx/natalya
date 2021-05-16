@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"math"
+	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
@@ -13,6 +13,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/bwmarrin/discordgo"
+	"github.com/glassonion1/xgo"
 	u "github.com/konafx/natalya/util"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/iterator"
@@ -22,7 +23,7 @@ import (
 
 // docID: increment
 type Poem struct {
-	Poem	string		`json:"poem" firestore:"poem"`
+	Poem	[]string	`json:"poem" firestore:"poem"`
 }
 
 // docID: increment
@@ -43,7 +44,7 @@ type UnknownPoetGame struct {
 	Stage			int			`json:"stage" firestore:"stage"`
 }
 
-var Haiku Command = &discordgo.ApplicationCommand{
+var command Command = &discordgo.ApplicationCommand{
 	Name: "haiku",
 	Description: "俳句ゲームだヨ♪\n",
 	Options: []*discordgo.ApplicationCommandOption{
@@ -110,13 +111,17 @@ var Haiku Command = &discordgo.ApplicationCommand{
 	},
 }
 
-func HaikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func commandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var poets []Poet
 	for k, v := range i.Data.Options {
-		u := v.UserValue(s)
+		user := v.UserValue(s)
+		if user.Bot {
+			u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("Bot %s に俳句は詠めないヨ", user.Mention()))
+			return
+		}
 		poet := Poet{
 			Next:	k,
-			UserID:	u.ID,
+			UserID:	user.ID,
 		}
 		poets = append(poets, poet)
 	}
@@ -235,23 +240,23 @@ func HaikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	result := "俳句ができたヨ\n"
 	for i, l := 0, len(poems); i<l; i++ {
-		result = fmt.Sprintf("%s\n%s %s", result, u.ToUser(poets[i].UserID), poems[i].Poem)
+		result = fmt.Sprintf("%s\n%s %s", result, u.ToUser(poets[i].UserID), poems[i].formatHaiku())
 	}
 	log.Debug(result)
 
 	s.ChannelMessageSend(i.ChannelID, result)
 
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionApplicationCommandResponseData{
-			Content: result,
-			AllowedMentions: &discordgo.MessageAllowedMentions{
-				Parse: []discordgo.AllowedMentionType{
-					discordgo.AllowedMentionTypeUsers,
-				},
-			},
-		},
-	})
+	// s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	// 	Type: discordgo.InteractionResponseChannelMessageWithSource,
+	// 	Data: &discordgo.InteractionApplicationCommandResponseData{
+	// 		Content: result,
+	// 		AllowedMentions: &discordgo.MessageAllowedMentions{
+	// 			Parse: []discordgo.AllowedMentionType{
+	// 				discordgo.AllowedMentionTypeUsers,
+	// 			},
+	// 		},
+	// 	},
+	// })
 	return
 }
 
@@ -285,8 +290,31 @@ func waitFinishWritingPoems(s *discordgo.Session, ctx context.Context, gamedoc *
 			return
 		}
 
+		{
+			it := gamedoc.Collection("poets").Documents(ctx)
+			for {
+				snap, err := it.Next()
+				if err == iterator.Done {
+					break
+				}
+				if err != nil {
+					log.Error(err)
+					return
+				}
+				// TODO: goroutinize
+				if _, err := snap.Ref.Update(ctx, []firestore.Update{
+					{
+						Path: "next",
+						Value: firestore.Increment(1),
+					},
+				}); err != nil {
+					log.Error(err)
+					return
+				}
+			}
+		}
+
 		stage = stage + 1
-		// TODO stage 更新処理
 		_, err = gamedoc.Update(ctx, []firestore.Update{
 			{
 				Path: "stage",
@@ -299,7 +327,7 @@ func waitFinishWritingPoems(s *discordgo.Session, ctx context.Context, gamedoc *
 		}
 
 		// stage = [1, 17]
-		if stage > 3 {
+		if stage > 17 {
 			c <- struct{}{}
 			return
 		}
@@ -336,7 +364,6 @@ func waitFinishStage(ctx context.Context, gamedoc *firestore.DocumentRef, c chan
 			for {
 				doc, err := iter.Next()
 				if err == iterator.Done {
-					log.Info("waitFinish!!")
 					c <- game.Stage
 					return // ok
 				}
@@ -346,9 +373,7 @@ func waitFinishStage(ctx context.Context, gamedoc *firestore.DocumentRef, c chan
 				}
 				var poem Poem
 				doc.DataTo(&poem)
-				log.Debug(poem.Poem, utf8.RuneCountInString(poem.Poem), game.Stage)
-				// TODO: 拗音対応
-				if utf8.RuneCountInString(poem.Poem) < game.Stage {
+				if len(poem.Poem) < game.Stage {
 					break
 				}
 			}
@@ -364,7 +389,14 @@ func sendDraftPoem(s *discordgo.Session, ctx context.Context, gamedoc *firestore
 		return err
 	}
 
-	snap, err := gamedoc.Collection("poems").Doc(strconv.Itoa(poet.Next)).Get(ctx)
+
+
+	game, err := getGame(ctx, gamedoc)
+	if err != nil {
+		return err
+	}
+	id := int(math.Mod(float64(poet.Next), float64(game.NumberOfPlayers)))
+	snap, err := gamedoc.Collection("poems").Doc(strconv.Itoa(id)).Get(ctx)
 	if err != nil {
 		return err
 	}
@@ -376,8 +408,7 @@ func sendDraftPoem(s *discordgo.Session, ctx context.Context, gamedoc *firestore
 	if len(poem.Poem) == 0 {
 		message = "最初の一文字を決めてほしいナ♪"
 	} else {
-		// TODO: 5 7 5 (合計17もじ）、空白を埋める（○）で
-		message = fmt.Sprintf("> %s\n\n次の一文字を入力してネ！", poem.Poem)
+		message = fmt.Sprintf("次の一文字を入力してネ！\n> %s", poem.formatHaiku())
 	}
 
 	if _, err = s.ChannelMessageSend(ch.ID, message); err != nil {
@@ -388,7 +419,7 @@ func sendDraftPoem(s *discordgo.Session, ctx context.Context, gamedoc *firestore
 }
 
 // リプきた！
-func UnknownPoetDMHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
+func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.GuildID != "" {
 		return
 	}
@@ -426,9 +457,35 @@ func UnknownPoetDMHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		gamedoc = snap.Ref
 	}
 
-	if !regexp.MustCompile(`^\p{Hiragana}$`).MatchString(m.Content) {
-		s.ChannelMessageSendReply(m.ChannelID, "1文字にしてね", m.Reference())
-		return
+	{
+		handler := func() {
+			s.ChannelMessageSendReply(m.ChannelID, "ひらがな１文字か「しゃ」「きゃ」の拗音にしてネ", m.Reference())
+		}
+		switch utf8.RuneCountInString(m.Content) {
+		case 1:
+			if !regexp.MustCompile(`^\p{Hiragana}$`).MatchString(m.Content) {
+				handler()
+				return
+			}
+		case 2:
+			if !xgo.Contains(contracteds, m.Content) {
+				handler()
+				return
+			}
+		default:
+			handler()
+			return
+		}
+	}
+
+	var game UnknownPoetGame
+	{
+		snap, err := gamedoc.Get(ctx)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		snap.DataTo(&game)
 	}
 
 	log.Info("get poet")
@@ -456,9 +513,10 @@ func UnknownPoetDMHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	poetsnap.DataTo(&poet)
 
 	log.Infof("get poem %d", poet.Next)
+	id := int(math.Mod(float64(poet.Next), float64(game.NumberOfPlayers)))
 	var poem Poem
 	{
-		snap, err := gamedoc.Collection("poems").Doc(strconv.Itoa(poet.Next)).Get(ctx)
+		snap, err := gamedoc.Collection("poems").Doc(strconv.Itoa(id)).Get(ctx)
 		if err != nil {
 			s.ChannelMessageSendReply(m.ChannelID, "エラーだヨ…", m.Reference())
 			return
@@ -469,32 +527,12 @@ func UnknownPoetDMHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	log.Debug(poet, poem)
 
-	var game UnknownPoetGame
-	{
-		snap, err := gamedoc.Get(ctx)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		snap.DataTo(&game)
-	}
-
 	// write
-	poem.Poem += m.Content
+	poem.Poem = append(poem.Poem[:game.Stage-1], m.Content)
 
 	// update
 	log.Info("update poem and poet")
-	_, err := gamedoc.Collection("poems").Doc(strconv.Itoa(poet.Next)).Set(ctx, poem)
-	if err != nil {
-		log.Error(err)
-		return
-	}
-	_, err = poetsnap.Ref.Update(ctx, []firestore.Update{
-		{
-			Path: "next",
-			Value: int(math.Mod(float64(poet.Next + 1), float64(game.NumberOfPlayers))),
-		},
-	})
+	_, err := gamedoc.Collection("poems").Doc(strconv.Itoa(id)).Set(ctx, poem)
 	if err != nil {
 		log.Error(err)
 		return
@@ -556,6 +594,17 @@ func getGame(ctx context.Context, gamedoc *firestore.DocumentRef) (game *Unknown
 	return
 }
 
+func (poem *Poem) formatHaiku() (ku string) {
+	for i, x := range poem.Poem {
+		switch i {
+		case 5, 12:
+			x = "　" + x
+		}
+		ku = ku + x
+	}
+	return
+}
+
 // db
 func createClient(ctx context.Context) *firestore.Client {
 	// Sets your Google Cloud Platform project ID.
@@ -570,7 +619,31 @@ func createClient(ctx context.Context) *firestore.Client {
 	return client
 }
 
+var contracteds = []string{
+	// 開拗音
+	"きゃ", "きゅ", "きょ",
+	"ぎゃ", "ぎゅ", "ぎょ",
+	"しゃ", "しゅ", "しょ",
+	"じゃ", "じゅ", "じょ",
+	"ちゃ", "ちゅ", "ちょ",
+	"ぢゃ", "ぢゅ", "ぢょ",
+	"にゃ", "にゅ", "にょ",
+	"ひゃ", "ひゅ", "ひょ",
+	"びゃ", "びゅ", "びょ",
+	"みゃ", "みゅ", "みょ",
+	"りゃ", "りゅ", "りょ",
+	// 合拗音
+	"くゎ", "ぐゎ",
+	// ↑ここまで五十音に記載？
+	"くぁ", "ぐぁ",
+	"つぁ", "つぃ", "つぇ", "つぉ",
+	"てぃ", "でぃ", "とぅ", "どぅ", "でゅ",
+	"ふぁ", "ふぃ", "ふぇ", "ふぉ", "ふゅ",
+	"うぃ", "うぇ", "うぉ", "ゔぁ", "ゔぃ", "ゔぇ", "ゔぉ",
+	"ちぇ", "しぇ", "じぇ",
+}
+
 func init() {
-	addCommand(Haiku, HaikuHandler)
-	addHandler(UnknownPoetDMHandler)
+	addCommand(command, commandHandler)
+	addHandler(dmHandler)
 }
