@@ -1,0 +1,22 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '--build-arg',
+      'DISCORD_BOT_TOKEN=${_DISCORD_BOT_TOKEN}',
+      '--build-arg',
+      'DISCORD_GUILD_ID=${_DISCORD_GUILD_ID}',
+      '-t',
+      'gcr.io/$PROJECT_ID/natalya',
+      '.' ]
+
+substitutions:
+  _DISCORD_BOT_TOKEN: foobar # default value
+  _DISCORD_GUILD_ID: "630562537921839115" # default value
+
+images: [
+  'gcr.io/$PROJECT_ID/natalya'
+]
+
+logsBucket: 'loglogloglolgolog'
+serviceAccount: 'projects/$PROJECT_ID/serviceAccounts/cicd-680@natalya.iam.gserviceaccount.com'

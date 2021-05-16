@@ -67,6 +67,7 @@ func init() {
 }
 
 func main() {
+	Server()
 	s.AddHandler(ready)
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
