@@ -54,7 +54,7 @@ type UnknownPoetGame struct {
 	Status			GameStatusType	`json:"status" firestore:"status"`
 }
 
-var command Command = &discordgo.ApplicationCommand{
+var haiku Command = &discordgo.ApplicationCommand{
 	Name: "詠み人知らず",
 	Description:	"１音ずつ詠んで、みんなで俳句を作るゲームなんダ♪",
 	Options: []*discordgo.ApplicationCommandOption{
@@ -130,13 +130,58 @@ var command Command = &discordgo.ApplicationCommand{
 			Name:			"筆を置く",
 			Description:	"中断するゾ…",
 		},
+		{
+			Type:			discordgo.ApplicationCommandOptionSubCommand,
+			Name:			"help",
+			Description:	"説明書",
+		},
 	},
+}
+
+func haikuHelper(s *discordgo.Session) *discordgo.MessageEmbed {
+	help := discordgo.MessageEmbed{
+		Title: "詠み人知らず",
+		Fields: []*discordgo.MessageEmbedField{
+			u.MakeEmbedField(
+				"遊び方",
+				"各参加者は空っぽの１句を最初にもらう",
+				fmt.Sprintf("最初の一字（「じゃ」など可）を決めて、%sにDMで送信", s.State.User.Mention()),
+				"みんな一音決めたら、次の人にその１句が渡されます",
+				"DMでもらった句に続く一字を決めて送信する",
+				"この作業を１７回繰り返して、みんなの一字でキメラの１句を人数分作っていく"),
+			u.MakeEmbedField(
+				fmt.Sprintf("コマンド：%s", haiku.Options[0].Name),
+				"詠み人（参加者）を２～１０人指名してください"),
+			u.MakeEmbedField(
+				fmt.Sprintf("コマンド: %s", haiku.Options[1].Name),
+				"参加している句会（このゲーム）を中断できます",
+				"現段階で作られた途中までの句が確認できます"),
+			u.MakeEmbedField(
+				"その他ルール",
+				"・送信する一字はひらがな１文字、または「じゃ」などの拗音一個でおねがいします",
+				"・みんなの一字が確定するまで何度も一字を送信することでやり直しできます",
+				"・バグったらすまん")},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "ナターリアbot - 製作者：inari#5104",
+			IconURL: s.State.User.AvatarURL("png"),
+		},
+	}
+	return &help
 }
 
 // func unknownPoetGameHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 // }
-func commandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	switch i.Data.Options[0].Name {
+	case "help":
+		embed := haikuHelper(s)
+		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionApplicationCommandResponseData{
+				Embeds: []*discordgo.MessageEmbed{embed},
+			},
+		})
+		return
 	case "筆を置く":
 		ctx := context.Background()
 		client := createClient(ctx)
@@ -804,6 +849,6 @@ var contracteds = []string{
 }
 
 func init() {
-	addCommand(command, commandHandler)
+	addCommand(haiku, haikuHandler)
 	addHandler(dmHandler)
 }
