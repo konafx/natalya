@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -10,6 +11,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Server() {
+	port := os.Getenv("PORT")
 	http.HandleFunc("/", handler) // ハンドラを登録してウェブページを表示させる
-	http.ListenAndServe(":80", nil)
+	http.ListenAndServe(":" + port, nil)
 }
