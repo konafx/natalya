@@ -8,6 +8,7 @@ require (
 	github.com/bwmarrin/discordgo v0.23.3-0.20210410202908-577e7dd4f6cc
 	github.com/glassonion1/xgo v0.0.1 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mroth/weightedrand v0.4.1
 	github.com/sirupsen/logrus v1.8.1

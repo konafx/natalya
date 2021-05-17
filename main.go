@@ -1,22 +1,15 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
-	"testing"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/konafx/natalya/loop"
 	log "github.com/sirupsen/logrus"
-)
-
-var (
-	GuildId			= flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
-	BotToken		= flag.String("token", "", "Bot access token")
-	RemoveCommand	= flag.Bool("rmcmd", true, "Remove all commands after shutdowning or not")
 )
 
 type Command *discordgo.ApplicationCommand
@@ -47,27 +40,34 @@ func addHandler(h ...interface{}){
 	handlers = append(handlers, h...)
 }
 
+type Env struct {
+	Guilds			[]string
+	BotToken		string `split_words:"true"`
+	RemoveCommand	bool `split_word:"true" default:"true"`
+}
+var env Env
+
 func init() {
 	log.SetLevel(log.DebugLevel)
 }
 
 func init() {
-	testing.Init()
-	flag.Parse()
+	err := envconfig.Process("discord", &env)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }
 
 func init() {
 	var err error
-	s, err = discordgo.New("Bot " + *BotToken)
-	s.LogLevel = 4
+	s, err = discordgo.New("Bot " + env.BotToken)
 	if err != nil {
-		fmt.Printf("error creating Discord session: %v", err)
-		os.Exit(1)
+		log.Fatal(err.Error())
 	}
 }
 
 func main() {
-	Server()
+	// Server()
 	s.AddHandler(ready)
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -91,12 +91,30 @@ func main() {
 
 	log.Printf("%#v", s.State)
 
-	for _, v := range commands {
-		log.Println(*GuildId, v)
-		cmd, err := s.ApplicationCommandCreate(s.State.User.ID, *GuildId, v)
-		v.ID = cmd.ID
-		if err != nil {
-			log.Fatalf("Cannot create '%v' command: %v", err, v.Name)
+	if len(env.Guilds) == 0 {
+		for _, v := range commands {
+			cmd, err := s.ApplicationCommandCreate(s.State.User.ID, "", v)
+			if err != nil {
+				log.Fatalf("Cannot create '%+v' command: %v", err, v.Name)
+			}
+			v.ID = cmd.ID
+		}
+	}
+
+	type key struct {
+		k1, k2 string
+	}
+	appcmds := make(map[key]string)
+
+	for _, x := range env.Guilds {
+		for _, v := range commands {
+			log.Println(x, v)
+			cmd, err := s.ApplicationCommandCreate(s.State.User.ID, x, v)
+			if err != nil {
+				log.Fatalf("Cannot create '%+v' command: %v", err, v.Name)
+			}
+			v.ID = cmd.ID
+			appcmds[key{x, v.Name}] = cmd.ID
 		}
 	}
 
@@ -110,11 +128,23 @@ func main() {
 	<-sc
 
 	fmt.Println("Tchau!")
-	if !*RemoveCommand { return }
+	if !env.RemoveCommand { return }
 
-	for _, v := range commands {
-		if err := s.ApplicationCommandDelete(s.State.User.ID, *GuildId, v.ID); err != nil {
-			log.Errorf("Skip delete cmd: %s (ID: %s)", v.Name, v.ID)
+	if len(env.Guilds) == 0 {
+		for _, v := range commands {
+			if err := s.ApplicationCommandDelete(s.State.User.ID, "", v.ID); err != nil {
+				log.Errorf("Skip delete cmd: %s (ID: %s)", v.Name, v.ID)
+				log.Error(err)
+			}
+		}
+	}
+	for _, x := range env.Guilds {
+		for _, v := range commands {
+			cmdID := appcmds[key{x, v.Name}]
+			if err := s.ApplicationCommandDelete(s.State.User.ID, x, cmdID); err != nil {
+				log.Errorf("Skip delete cmd: %s (ID: %s) on guild %s", v.Name, cmdID, x)
+				log.Error(err)
+			}
 		}
 	}
 
