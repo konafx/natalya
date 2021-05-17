@@ -149,7 +149,6 @@ func AmongUsReactionAddHandler(s *discordgo.Session, r *discordgo.MessageReactio
 		return
 	}
 
-	log.Debug(m.Embeds[0].Title)
 	if len(m.Embeds) == 0 || m.Embeds[0].Title != "Amove Us" {
 		return
 	}
