@@ -67,7 +67,7 @@ func init() {
 }
 
 func main() {
-	Server()
+	// go Server()
 
 	s.AddHandler(ready)
 
@@ -93,6 +93,7 @@ func main() {
 	log.Printf("%#v", s.State)
 
 	if len(env.Guilds) == 0 {
+		log.Debugf("Create global command")
 		for _, v := range commands {
 			cmd, err := s.ApplicationCommandCreate(s.State.User.ID, "", v)
 			if err != nil {
@@ -108,6 +109,7 @@ func main() {
 	appcmds := make(map[key]string)
 
 	for _, x := range env.Guilds {
+		log.Debugf("Create guild command")
 		for _, v := range commands {
 			log.Println(x, v)
 			cmd, err := s.ApplicationCommandCreate(s.State.User.ID, x, v)
