@@ -260,20 +260,13 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		// 重複チェック
 		{
-			var userIds []string
+			m := make(map[string]struct{})
 			for _, v := range poets {
-				userIds = append(userIds, v.UserID)
-			}
-			sort.Slice(userIds, func(i, j int) bool { return userIds[i] < userIds[j] })
-			for k, v := range userIds {
-				log.Debugln(k, v)
-				if k + 1 == len(userIds) {
-					break
-				}
-				if v == userIds[k+1] {
-					u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("%s が二回指名されてるゾ", u.ToUser(v)))
+				if _, ok := m[v.UserID]; ok {
+					u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("%s が二回指名されてるゾ", u.ToUser(v.UserID)))
 					return
 				}
+				m[v.UserID] = struct{}{}
 			}
 		}
 
