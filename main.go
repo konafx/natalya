@@ -5,9 +5,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"context"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/joho/godotenv"
 	"github.com/konafx/natalya/loop"
 	log "github.com/sirupsen/logrus"
 )
@@ -47,13 +49,26 @@ type Env struct {
 }
 var env Env
 
+type HttpEnv struct {
+	Port	int `default:"8000"`
+}
+var httpEnv HttpEnv
+
 func init() {
 	log.SetLevel(log.DebugLevel)
 }
 
 func init() {
-	err := envconfig.Process("discord", &env)
-	if err != nil {
+	if err := godotenv.Load(); err != nil {
+		log.Infoln(".env file not found")
+	}
+}
+
+func init() {
+	if err := envconfig.Process("discord", &env); err != nil {
+		log.Fatal(err.Error())
+	}
+	if err := envconfig.Process("", &httpEnv); err != nil {
 		log.Fatal(err.Error())
 	}
 }
@@ -67,8 +82,6 @@ func init() {
 }
 
 func main() {
-	// go Server()
-
 	s.AddHandler(ready)
 
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -124,6 +137,9 @@ func main() {
 	for _, v := range handlers {
 		s.AddHandler(v)
 	}
+
+	ctx := context.Background()
+	go Server(ctx, httpEnv.Port)
 
 	fmt.Println("Natalya is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)

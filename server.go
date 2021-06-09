@@ -1,39 +1,29 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
+	"strconv"
 
 	log "github.com/sirupsen/logrus"
 )
 
-var port string
-
-func init() {
-	port = os.Getenv("PORT")
-}
-
 func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, World")
+	fmt.Fprintf(w, "Natalya is running")
 }
 
-func Server() {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
+func Server(ctx context.Context, port int) {
 	go func() {
-		if err := http.ListenAndServe(":" + port, nil); err != nil {
+		http.HandleFunc("/", handler)
+		if err := http.ListenAndServe(":" + strconv.Itoa(port), nil); err != nil {
 			log.Error(err)
 		}
 	}()
-
-	// シグナルを受信するまでブロック
-	// https://github.com/gorilla/mux#graceful-shutdown
-	// https://gist.github.com/enricofoltran/10b4a980cd07cb02836f70a4ab3e72d7
-	log.Println("server is ready to handle requests at :%s", port)
-	<-c
-
-	return
+	log.Println("server is ready to handle requests at ", port)
+	select {
+	case <-ctx.Done():
+		log.Println("server shutdown")
+		return
+	}
 }
