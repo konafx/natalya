@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"context"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/kelseyhightower/envconfig"
@@ -137,9 +136,6 @@ func main() {
 	for _, v := range handlers {
 		s.AddHandler(v)
 	}
-
-	ctx := context.Background()
-	go Server(ctx, httpEnv.Port)
 
 	fmt.Println("Natalya is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)

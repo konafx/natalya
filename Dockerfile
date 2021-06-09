@@ -8,18 +8,19 @@ RUN go mod download
 
 COPY . ./
 
-RUN go build -o natalya
+RUN go build -o natalya.exe
 
 FROM debian:buster-slim
 
 WORKDIR /go/bin
 
-ARG DISCORD_BOT_TOKEN
-ARG DISCORD_GUILD_ID
+RUN mkdir /assets
+COPY assets/ /assets/
 
-COPY --from=builder /go/src/natalya /go/bin/app
-RUN chmod +x /go/bin/app
+COPY --from=builder /go/src/natalya.exe /go/bin/app.exe
+RUN chmod +x /go/bin/app.exe
+COPY assets/serifs.yml /assets/serifs.yml
 
-CMD ["/bin/bash", "-c", "./app --guild ${DISCORD_GUILD_ID} --token ${DISCORD_BOT_TOKEN}"]
+CMD ["/bin/bash", "-c", "/go/bin/app.exe"]
 
-EXPOSE 8080
+EXPOSE 8000
