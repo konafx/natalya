@@ -41,7 +41,7 @@ var todayHand *Hand
 
 func TodayHandTask(s *discordgo.Session) {
 	if err := yaml.Unmarshal(handsData, &hands); err != nil {
-		log.Errorf("Cannot read handsData, err: %v", err)
+		log.Errorf("Cannot unmarshal hands, err: %v", err)
 		return
 	}
 
