@@ -48,11 +48,6 @@ type Env struct {
 }
 var env Env
 
-type HttpEnv struct {
-	Port	int `default:"8000"`
-}
-var httpEnv HttpEnv
-
 func init() {
 	log.SetLevel(log.DebugLevel)
 }
@@ -65,9 +60,6 @@ func init() {
 
 func init() {
 	if err := envconfig.Process("discord", &env); err != nil {
-		log.Fatal(err.Error())
-	}
-	if err := envconfig.Process("", &httpEnv); err != nil {
 		log.Fatal(err.Error())
 	}
 }
@@ -107,6 +99,7 @@ func main() {
 	if len(env.Guilds) == 0 {
 		log.Debugf("Create global command")
 		for _, v := range commands {
+			log.Println(v)
 			cmd, err := s.ApplicationCommandCreate(s.State.User.ID, "", v)
 			if err != nil {
 				log.Fatalf("Cannot create '%+v' command: %v", err, v.Name)
