@@ -1,8 +1,8 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"time"
 
@@ -18,11 +18,7 @@ type Hand struct {
 	Fan		int		`yaml:"fan"`
 }
 
-const (
-	MaxFan = 13
-	HandsFile = "assets/hands.yml"
-	SerifsFile = "assets/serifs.yml"
-)
+const MaxFan = 13
 
 var TodayHandLoop = loop.Loop{
 	Name:		"TodayHand",
@@ -32,24 +28,24 @@ var TodayHandLoop = loop.Loop{
 	Init:		true,
 }
 
-var todayHand Hand
+var hands []*Hand
+var serifs []*string
+
+//go:embed assets/hands.yaml
+var handsData []byte
+
+//go:embed assets/serifs.yaml
+var serifsData []byte
+
+var todayHand *Hand
 
 func TodayHandTask(s *discordgo.Session) {
-	buf, err := ioutil.ReadFile(HandsFile)
-	if err != nil {
-		log.Errorf("Cannot read handsfile(%s), err: %v", HandsFile, err)
+	if err := yaml.Unmarshal(handsData, &hands); err != nil {
+		log.Errorf("Cannot read handsData, err: %v", err)
 		return
 	}
 
-	var hands []Hand
-	err = yaml.Unmarshal(buf, &hands)
-	if err != nil {
-		log.Errorf("Cannot read yaml file, err: %v", err)
-		return
-	}
-
-	var hand Hand
-	hand, err = choiceHand(hands)
+	hand, err := choiceHand(hands)
 	if err != nil {
 		log.Errorf("hand choice error: %v", err)
 		return
@@ -60,9 +56,7 @@ func TodayHandTask(s *discordgo.Session) {
 	log.Infof("Today hand is %s", todayHand.Name)
 }
 
-func choiceHand(hands []Hand) (Hand, error) {
-	var hand Hand = Hand{}
-
+func choiceHand(hands []*Hand) (*Hand, error) {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	choices := make([]wr.Choice, len(hands))
@@ -73,25 +67,17 @@ func choiceHand(hands []Hand) (Hand, error) {
 	chooser, err := wr.NewChooser(choices...)
 	if err != nil {
 		log.Errorf("Cannot create chooser, err: %v", err)
-		return hand, err
+		return nil, err
 	}
 
-	hand = chooser.Pick().(Hand)
+	hand := chooser.Pick().(*Hand)
 	return hand, nil
 }
 
-func choiceSerif() (string, error) {
-	buf, err := ioutil.ReadFile(SerifsFile)
-	if err != nil {
-		log.Errorf("Cannot read handsfile(%s), err: %v", SerifsFile, err)
-		return "", err
-	}
-
-	var serifs []string
-	err = yaml.Unmarshal(buf, &serifs)
-	if err != nil {
+func choiceSerif() (*string, error) {
+	if err := yaml.Unmarshal(serifsData, &serifs); err != nil {
 		log.Errorf("Cannot unmarshal serifs: %v", err)
-		return "", err
+		return nil, err
 	}
 
 	i := rand.Intn(len(serifs))
@@ -126,7 +112,7 @@ func MahjongHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			log.Error(err)
 			return
 		}
-		content = fmt.Sprintf("今日の役は **%s**♪\n%s翻ダ！ %s", todayHand.Name, int2kanji[todayHand.Fan], serif)
+		content = fmt.Sprintf("今日の役は **%s**♪\n%s翻ダ！ %s", todayHand.Name, int2kanji[todayHand.Fan], *serif)
 	default:
 		content = "理解できない"
 	}
