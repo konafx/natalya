@@ -184,6 +184,11 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	case "筆を置く":
 		ctx := context.Background()
 		client := createClient(ctx)
+		if client == nil {
+			u.InteractionErrorResponse(s, i.Interaction, "データベースに接続できないヨ…")
+			log.Errorf("Failed create firestore client")
+			return
+		}
 		defer client.Close()
 
 		log.Debug("get gamesnap")
@@ -275,6 +280,11 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		ctx := context.Background()
 		client := createClient(ctx)
+		if client == nil {
+			u.InteractionErrorResponse(s, i.Interaction, "データベースに接続できないヨ…")
+			log.Errorf("Failed create firestore client")
+			return
+		}
 		defer client.Close()
 
 		var gamedoc *firestore.DocumentRef
@@ -584,6 +594,9 @@ func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	ctx := context.Background()
 	client := createClient(ctx)
+	if client == nil {
+		return
+	}
 	defer client.Close()
 
 	log.Info("get player")
@@ -809,7 +822,8 @@ func createClient(ctx context.Context) *firestore.Client {
 
 	client, err := firestore.NewClient(ctx, projectID)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Errorf("Failed to create client: %v", err)
+		return nil
 	}
 	// Close client when done with
 	// defer client.Close()
