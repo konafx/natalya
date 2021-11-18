@@ -9,6 +9,7 @@ require (
 	github.com/joho/godotenv v1.3.0
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/mattn/go-pubsub v0.0.0-20160821075316-7a151c7747cd // indirect
 	github.com/mitchellh/mapstructure v1.4.2 // indirect
 	github.com/mroth/weightedrand v0.4.1
 	github.com/sirupsen/logrus v1.8.1

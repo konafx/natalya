@@ -124,6 +124,15 @@ func (repo *HaikuRepository) UpdateGame(ctx context.Context, game *HaikuGame) er
 	return nil
 }
 
+func (repo *HaikuRepository) GetGameByRefID(ctx context.Context, refID string) *HaikuGame {
+	for _, v := range repo.games {
+		if v.RefID == refID {
+			return v
+		}
+	}
+	return nil
+}
+
 func (repo *HaikuRepository) GetGameAndPoetByPoetID(poetID string) (game *HaikuGame, poet *Poet) {
 	for _, v := range repo.games {
 		poet := repo.GetPoetOnGameByID(poetID, v)
