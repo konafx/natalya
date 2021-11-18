@@ -1,0 +1,35 @@
+- RefID: "1"
+  Status: 1
+  Stage: 2
+  NumberOfPoets: 2
+  Poets:
+    - ID: "1"
+      NextPoemNumber: 1
+    - ID: "2"
+      NextPoemNumber: 2
+  Poems:
+    - PoemRunes:
+      - PoetID: "1"
+        Rune: あ
+    - PoemRunes:
+      - PoetID: "2"
+        Rune: い
+- RefID: "2"
+  Status: 1
+  Stage: 3
+  NumberOfPoets: 2
+  Poets:
+    - ID: "3"
+      NextPoemNumber: 1
+    - ID: "4"
+      NextPoemNumber: 2
+  Poems:
+    - PoemRunes:
+      - PoetID: "3"
+        Rune: あ
+      - PoetID: "4"
+        Rune: い
+    - PoemRunes:
+      - PoetID: "4"
+        Rune: あ
+
