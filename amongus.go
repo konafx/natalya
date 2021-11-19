@@ -253,7 +253,7 @@ func removeAddedReaction(s *discordgo.Session, r *discordgo.MessageReactionAdd) 
 }
 
 func init() {
-	log.Debugf("%v, %v", AmongUs, AmongUsHandler)
+	// log.Debugf("%v, %v", AmongUs, AmongUsHandler)
 	addCommand(AmongUs, AmongUsHandler)
 	addHandler(AmongUsReactionAddHandler, AmongUsMessageCreateHandler)
 }
