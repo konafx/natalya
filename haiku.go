@@ -7,6 +7,7 @@ import (
 	"time"
 	"sync"
 	"unicode/utf8"
+	"regexp"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/glassonion1/xgo"
@@ -18,9 +19,8 @@ import (
 )
 
 var ps *pubsub.PubSub
-type StageFinishEvent struct {
+type HaikuSuspendEvent struct {
 	gameRefID	string
-	stage	uint
 }
 type PoemUpdateEvent struct {
 	gameRefID	string
@@ -169,41 +169,17 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		} else {
 			userID = i.Member.User.ID
 		}
-		gamesnap, err := getGamesnapByUserID(ctx, client, userID)
-		if err != nil {
+		game, _ := haikuRepo.GetGameAndPoetByPoetID(userID)
+		if game == nil {
 			u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("開かれてる句会に参加してないみたイ…"))
 			return
 		}
 
-		log.Debug("update game status to suspend")
-		if _, err := gamesnap.Ref.Update(ctx, []firestore.Update{
-			{
-				Path: "status",
-				Value: GameStatusSuspend,
-			},
-		}); err != nil {
-			u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("中断できなかったヨ…"))
-			return
-		}
-
-		log.Debug("get poets")
-		if err != nil {
-			u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("詠み人が取得できなかったヨ…"))
-			return
-		}
-
-		log.Debug("get poems")
-		poems, err := getPoems(ctx, gamesnap.Ref)
-		if err != nil {
-			u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("俳句が取得できなかったヨ…"))
-			return
-		}
+		game.Status = repository.GameStatusSuspend
+		ps.Pub(&HaikuSuspendEvent{game.RefID})
 
 		log.Debug("make result")
-		result := "ここまでつくってたヨ\n"
-		for i, l := 0, len(poems); i<l; i++ {
-			result = fmt.Sprintf("%s\n%s %s", result, u.ToUser(poets[i].UserID), poems[i].formatHaiku())
-		}
+		result := lineupHaiku(game.Poems, "ここまでつくってたヨ\n")
 
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -253,7 +229,7 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 		for _, v := range poets {
 			exist, _ := haikuRepo.GetGameAndPoetByPoetID(v.ID)
-			if exist != nil {
+			if exist != nil && exist.Status == repository.GameStatusPlaying {
 				u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("%sが別の句会に参加しているみたイ", u.ToUser(v.ID)))
 				log.Debugf("user:%s is composing another poem", v.ID)
 				return
@@ -298,52 +274,39 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}
 
 		// ゲーム開始
-		{
-			c := make(chan struct{})
-			watch := make(chan bool)
+		finish := make(chan struct{})
+		suspend := make(chan struct{})
 
-			log.Debugln("Start to wait writing poems")
-			go waitFinishWritingPoems(s, ctx, game, c)
-			go watchSuspendedGame(ctx, gamedoc, watch)
-			select {
-			case _, ok := <-c:
-				if !ok {
-					s.ChannelMessageSend(i.ChannelID, "なんか起きたので中断されました")
-					if _, err := gamedoc.Update(ctx, []firestore.Update{
-						{
-							Path: "status",
-							Value: GameStatusSuspend,
-						},
-					}); err != nil {
-						log.Error(err)
-					}
-					return
-				}
-			case v := <-watch:
-				if v {
-					log.Infof("Suspended game while waiting to finish writing poems")
-					return
-				}
+		log.Debugln("Start to wait writing poems")
+		ctxCancel, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go waitFinishWritingPoems(s, ctxCancel, game, finish)
+		// go watchSuspendedGame(ctx, game, watch)
+		ps.Sub(func (e *HaikuSuspendEvent) {
+			if e.gameRefID == game.RefID {
+				suspend <- struct{}{}
 			}
-			log.Debugln("End to wait writing poems")
+		})
+		select {
+		case _, ok := <-finish:
+			if !ok {
+				s.ChannelMessageSend(i.ChannelID, "原因不明のエラーが起きたので中断されました")
+				game.Status = repository.GameStatusSuspend
+				if err := haikuRepo.StoreGame(ctx, game); err != nil {
+					log.WithError(err).Errorf("failed update suspended game(%v)", game.RefID)
+				}
+				return
+			}
+		case <-suspend:
+			log.Debugf("stop game(%v) with suspend command", game.RefID)
+			return
 		}
+		log.Debugln("End to wait writing poems")
 
-		poems, _ := getPoems(ctx, gamedoc)
+		result := lineupHaiku(game.Poems, "俳句ができたヨ\n")
+		game.Status = repository.GamestatusGraceful
 
-		result := "俳句ができたヨ\n"
-		for i, l := 0, len(poems); i<l; i++ {
-			result = fmt.Sprintf("%s\n%s %s", result, u.ToUser(poets[i].UserID), poems[i].formatHaiku())
-		}
-		log.Debug(result)
-
-		if _, err := gamedoc.Update(ctx, []firestore.Update{
-			{
-				Path: "status",
-				Value: GamestatusGraceful,
-			},
-		}); err != nil {
-			log.Error(err)
-		}
+		haikuRepo.StoreGame(ctx, game)
 
 		s.ChannelMessageSend(i.ChannelID, result)
 
@@ -359,71 +322,48 @@ func waitFinishWritingPoems(s *discordgo.Session, ctx context.Context, game *rep
 
 	// 各ステージの終了を検知する
 	for {
-		poets := game.Poets
-
 		// DM を送る
-		for _, v := range poets {
+		for _, v := range game.Poets {
 			if err := sendDraftPoem(s, ctx, game, v); err != nil {
 				log.Error(err)
 				return
 			}
 		}
 
-		c2 := make(chan int)
+		c2 := make(chan uint)
 		log.Debugln("Start to wait finish stage")
 		go waitFinishStage(ctx, game, c2)
-		stage, ok := <-c2
-		log.Debugln("End to wait finish stage")
-		if !ok {
-			log.Error("something happened on waitFinishStage")
+		select {
+		case stage, ok := <-c2:
+			log.Debugln("End to wait finish stage")
+			if !ok {
+				log.Error("something happened on waitFinishStage")
+				return
+			}
+			for _, v := range game.Poets {
+				v.NextPoemNumber += 1
+			}
+			game.Stage = stage + 1
+		case <-ctx.Done():
+			// canceled
+			close(c2)
 			return
 		}
 
-		{
-			it := gamedoc.Collection("poets").Documents(ctx)
-			for {
-				snap, err := it.Next()
-				if err == iterator.Done {
-					break
-				}
-				if err != nil {
-					log.Error(err)
-					return
-				}
-				// TODO: goroutinize
-				if _, err := snap.Ref.Update(ctx, []firestore.Update{
-					{
-						Path: "next",
-						Value: firestore.Increment(1),
-					},
-				}); err != nil {
-					log.Error(err)
-					return
-				}
-			}
-		}
-
-		stage = stage + 1
-		_, err = gamedoc.Update(ctx, []firestore.Update{
-			{
-				Path: "stage",
-				Value: stage,
-			},
-		})
-		if err != nil {
-			log.Error(err)
+		if err := haikuRepo.StoreGame(ctx, game); err != nil {
+			log.WithError(err).Errorf("failed update game (stage++)")
 			return
 		}
 
 		// stage = [1, 17]
-		if stage > 17 {
+		if game.Stage > 17 {
 			c <- struct{}{}
 			return
 		}
 	}
 }
 
-// 各ステージの終了を待つ
+// waitFinishStage 各ステージの終了を待つ
 func waitFinishStage(ctx context.Context, game *repository.HaikuGame, c chan uint) {
 	defer close(c)
 
@@ -501,6 +441,7 @@ func updatePoem(content string, poet *repository.Poet, game *repository.HaikuGam
 }
 
 func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
+	log.Debugf("DM: %s %s", m.Author.ID, m.Content)
 	if m.GuildID != "" {
 		return
 	}
@@ -510,13 +451,16 @@ func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	game, poet := haikuRepo.GetGameAndPoetByPoetID(m.Author.ID)
 	if game == nil {
+		log.Debugln("game nil")
 		return
 	}
 
 	if game.Status != repository.GameStatusPlaying {
+		log.Debugln("game status is not playin")
 		return
 	}
 	// ここまでで参加者であることがおそらく保証されている
+	log.Debugln("he is composer")
 
 	{
 		handler := func() {
@@ -538,6 +482,7 @@ func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 	}
+	log.Debugf("nice rune: %s", m.Content)
 
 	haikuDraft := updatePoem(m.Content, poet, game)
 
@@ -546,37 +491,21 @@ func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	return
 }
 
-func watchSuspendedGame(ctx context.Context, gamedoc *firestore.DocumentRef, c chan bool) {
-	defer close(c)
-
-	ctx2, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-
-	var game UnknownPoetGame
-
-	it := gamedoc.Snapshots(ctx2)
-	for {
-		snap, err := it.Next()
-		if status.Code(err) == codes.DeadlineExceeded {
-			log.Error(err)
-			return
-		}
-		if err != nil {
-			log.Error(err)
-			return
-		}
-		if !snap.Exists() {
-			// 消す予定なければ、消えるのはヤバイのでエラー
-			log.Errorln("Document no longer exist")
-			return
-		}
-		snap.DataTo(&game)
-		if game.Status == GameStatusSuspend {
-			c <- true
+func lineupHaiku(poems []*repository.Poem, result string) string {
+	for _, v := range poems {
+		if len(v.PoemRunes) > 0 {
+			lastPoemRune := v.PoemRunes[len(v.PoemRunes)-1]
+			result = fmt.Sprintf("%s\n%s %s", result, u.ToUser(lastPoemRune.PoetID), v.FormatHaiku())
 		}
 	}
-	return
+	return result
 }
+
+// func watchSuspendedGame(ctx context.Context, game *repository.HaikuGame, c chan bool) {
+// 	defer close(c)
+// 
+// 	return
+// }
 
 var contracteds = []string{
 	// 開拗音
@@ -606,8 +535,11 @@ func init() {
 	ps = pubsub.New()
 
 	ctx := context.Background()
-	firestore := service.InitializeFirestore(ctx)
-	var err error
+	firestore, err := service.InitializeFirestore(ctx)
+	if err != nil {
+		log.Errorf("Cannot creata firestore client: %v", err)
+		return
+	}
 	haikuRepo, err = repository.NewHaikuRepository(ctx, firestore)
 	if err != nil {
 		log.Errorf("Cannot init haikuGame: %v", err)

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"math"
 
 	"github.com/konafx/natalya/service"
@@ -54,7 +53,6 @@ type HaikuRepository struct {
 func NewHaikuRepository(ctx context.Context, firestore service.FirestoreClient) (repo *HaikuRepository, err error) {
 	repo = &HaikuRepository{}
 	repo.service = firestore
-	fmt.Println("get")
 	games, err := repo.GetAllGames(ctx)
 	if err != nil {
 		return nil, err
@@ -66,6 +64,10 @@ func NewHaikuRepository(ctx context.Context, firestore service.FirestoreClient) 
 func NewHaikuGame(poets []*Poet) *HaikuGame {
 	numberOfPoets := uint(len(poets))
 	poems := make([]*Poem, numberOfPoets)
+	for i := range poems {
+		poems[i] = &Poem{}
+	}
+
 	return &HaikuGame{
 		Stage:	1,
 		Status:	GameStatusStart,
@@ -80,18 +82,15 @@ func NewPoemRune(poetID string, _rune string) *PoemRune {
 }
 
 func (repo *HaikuRepository) GetAllGames(ctx context.Context) (games []*HaikuGame, err error) {
-	fmt.Printf("%v", games)
 	maps, err := repo.service.GetItemsFromCollection(ctx, "Haiku")
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("get!")
 	for _, v := range maps {
 		var game HaikuGame
 		if ok, err := util.MapToStruct(*v, &game); !ok || err != nil {
 			return nil, err
 		}
-		fmt.Printf("map: %+v\ngame:%+v\n\tpoet[0]: %+v, poem:%+v\n", v, game, *game.Poets[0], *game.Poems[0])
 		games = append(games, &game)
 	}
 	return games, nil

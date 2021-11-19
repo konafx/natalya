@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 
+	firebase "firebase.google.com/go"
 	"cloud.google.com/go/firestore"
-	"google.golang.org/api/iterator"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/api/iterator"
 )
 
 type FirestoreClient interface {
@@ -19,17 +20,21 @@ type Firestore struct {
 	client	*firestore.Client
 }
 
-func InitializeFirestore(ctx context.Context) *Firestore {
-	projectID := "natalya"
+func InitializeFirestore(ctx context.Context) (*Firestore, error) {
+	config := &firebase.Config{ProjectID: "discord-natalya"}
+	app, err := firebase.NewApp(ctx, config)
+	if err != nil {
+		return  nil, err
+	}
 
-	client, err := firestore.NewClient(ctx, projectID)
+	client, err := app.Firestore(ctx)
 	if err != nil {
 		log.Errorf("Failed to create client: %v", err)
-		return nil
+		return nil, err
 	}
 
 	c := Firestore{client}
-	return &c
+	return &c, nil
 }
 
 func (c *Firestore) GetItemsFromCollection(ctx context.Context, path string) (items []*map[string]interface{}, err error) {

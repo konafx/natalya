@@ -80,7 +80,7 @@ func TestSample(t *testing.T) {
 
 	poem2 := repo.GetNextPoem(poet, game)
 	t.Logf("poem: %v, poem2: %v", poem.FormatHaiku(), poem2.FormatHaiku())
-	if poem.FormatHaiku() == poem2.FormatHaiku() {
+	if poem.FormatHaiku() != poem2.FormatHaiku() {
 		t.Fatal("アドレス参照してるけど駄目っぽい")
 	}
 }
