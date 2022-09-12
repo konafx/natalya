@@ -169,13 +169,14 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		} else {
 			userID = i.Member.User.ID
 		}
-		game, _ := haikuRepo.GetGameAndPoetByPoetID(userID)
+		game, _ := haikuRepo.GetGameAndPoetFilterStatusByPoetID(userID, repository.GameStatusPlaying)
 		if game == nil {
 			u.InteractionErrorResponse(s, i.Interaction, fmt.Sprintf("開かれてる句会に参加してないみたイ…"))
 			return
 		}
 
 		game.Status = repository.GameStatusSuspend
+		haikuRepo.UpdateGame(ctx, game)
 		ps.Pub(&HaikuSuspendEvent{game.RefID})
 
 		log.Debug("make result")
@@ -292,7 +293,7 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 			if !ok {
 				s.ChannelMessageSend(i.ChannelID, "原因不明のエラーが起きたので中断されました")
 				game.Status = repository.GameStatusSuspend
-				if err := haikuRepo.StoreGame(ctx, game); err != nil {
+				if err := haikuRepo.UpdateGame(ctx, game); err != nil {
 					log.WithError(err).Errorf("failed update suspended game(%v)", game.RefID)
 				}
 				return
@@ -306,7 +307,7 @@ func haikuHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		result := lineupHaiku(game.Poems, "俳句ができたヨ\n")
 		game.Status = repository.GamestatusGraceful
 
-		haikuRepo.StoreGame(ctx, game)
+		haikuRepo.UpdateGame(ctx, game)
 
 		s.ChannelMessageSend(i.ChannelID, result)
 
@@ -346,17 +347,17 @@ func waitFinishWritingPoems(s *discordgo.Session, ctx context.Context, game *rep
 			game.Stage = stage + 1
 		case <-ctx.Done():
 			// canceled
-			close(c2)
 			return
 		}
 
-		if err := haikuRepo.StoreGame(ctx, game); err != nil {
+		if err := haikuRepo.UpdateGame(ctx, game); err != nil {
 			log.WithError(err).Errorf("failed update game (stage++)")
 			return
 		}
 
 		// stage = [1, 17]
-		if game.Stage > 17 {
+		// if game.Stage > 17 {
+		if game.Stage > 3 {
 			c <- struct{}{}
 			return
 		}
@@ -379,6 +380,7 @@ func waitFinishStage(ctx context.Context, game *repository.HaikuGame, c chan uin
 	composeds := make(map[string](chan struct{}))
 	for _, v := range game.Poets {
 		composeds[v.ID] = make(chan struct{})
+		defer close(composeds[v.ID])
 
 		// 時限までのタスク消化
 		go func (ctx context.Context, poetID string) {
@@ -386,7 +388,6 @@ func waitFinishStage(ctx context.Context, game *repository.HaikuGame, c chan uin
 			case <- composeds[poetID]:
 				wg.Done()
 			case <- ctx.Done():
-				log.Infof("Timeup waitFinishStage on Game(%v)", game.RefID)
 				// timeout!
 			}
 		}(ctxTimeout, v.ID)
@@ -397,9 +398,20 @@ func waitFinishStage(ctx context.Context, game *repository.HaikuGame, c chan uin
 		composeds[e.poetID] <- struct{}{}
 	})
 
-	wg.Wait()
-	c <- game.Stage
-	// 処理完了
+	finish := make(chan struct{})
+	go func(wg *sync.WaitGroup, c chan struct{}) {
+		defer close(c)
+		wg.Wait()
+		c <- struct{}{}
+	}(&wg, finish)
+
+	select {
+	case <-finish:
+		c <- game.Stage
+		// 処理完了
+	case <- ctx.Done():
+		log.Infof("Timeup waitFinishStage on Game(%v)", game.RefID)
+	}
 }
 
 // 各ユーザーにDMおくって放置
@@ -449,17 +461,13 @@ func dmHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	game, poet := haikuRepo.GetGameAndPoetByPoetID(m.Author.ID)
+	game, poet := haikuRepo.GetGameAndPoetFilterStatusByPoetID(m.Author.ID, repository.GameStatusPlaying)
 	if game == nil {
 		log.Debugln("game nil")
 		return
 	}
-
-	if game.Status != repository.GameStatusPlaying {
-		log.Debugln("game status is not playin")
-		return
-	}
 	// ここまでで参加者であることがおそらく保証されている
+
 	log.Debugln("he is composer")
 
 	{
